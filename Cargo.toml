@@ -1,0 +1,10 @@
+[package]
+name = "debugbox"
+version = "0.1.0"
+authors = ["Oleg Scherbakov <scherbakov.oleg@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+iced = "0.3"
+pollster = "0.2"
+zbus = "2.0.0-beta.7"
