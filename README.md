@@ -14,8 +14,8 @@ Basically DOSBox has built-in [debugger](https://www.vogons.org/viewtopic.php?t=
 
 1. Rust
 	- Install [Rust](https://www.rust-lang.org/tools/install).
-2. D-Bus
-	- `apt install dbus libdbus-1-dev`).
+2. Docker
+	- [Docker](https://docs.docker.com/engine/install/) to build DOSBox
 
 ### DebugBox
 
@@ -25,22 +25,18 @@ Execute
 
 ### DOSBox
 
-1. Clone DOSBox repository.
-2. Replace `dosbox-0.74/src/debug/debug.cpp` with the file `dosbox/0.74/debug.cpp` (which comes with DebugBox).
-3. Configure with debug feature enabled: `./configure --enable-debug`.
-4. Add `libdbus` to the Makefile:
+You can build DOSBox locally but it's more convenient to do this in Docker:
 
-```
-CPPFLAGS =  -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT -I/usr/include/dbus-1.0 -I/usr/lib/dbus-1.0/include -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include
-```
-
-```
-LIBS = -lSDL_sound -lasound -lm -ldl -lpthread -L/usr/lib/x86_64-linux-gnu -lSDL -lcurses -ldbus-1 -lpng -lz -lX11 -lGL
+```sh
+cd ./dosbox
+docker build -t dosbox .
+docker run --rm --entrypoint bash dosbox -c 'cat /app/dosbox-staging/src/dosbox; sleep 1' > dosbox-dbus
+chmod +x dosbox-dbus
 ```
 
 ## Test from the shell
 
-Start the DOSBox and hit `Alt + Pause` to break in.
+Start the DOSBox and hit `Alt + Pause` (`Fn + Alt + P` on modern keyboards) to break in.
 
 Get the value of `EAX`:
 ```
