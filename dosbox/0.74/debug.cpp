@@ -993,7 +993,7 @@ DBusHandlerResult cpu_regs_handler(DBusConnection* conn, DBusMessage* msg, void*
 		DBusMessageIter ri;
 		dbus_message_iter_init_append(rm, &ri);
 
-		if(path[2])
+		if(path[1] && path[2])
 		{
 			std::string reg(path[2]);
 
@@ -1049,7 +1049,6 @@ DBusHandlerResult cpu_regs_handler(DBusConnection* conn, DBusMessage* msg, void*
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT32, &reg_ebx);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT32, &reg_ecx);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT32, &reg_edx);
-
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT32, &reg_esi);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT32, &reg_edi);
 
@@ -1072,36 +1071,40 @@ DBusHandlerResult cpu_regs_handler(DBusConnection* conn, DBusMessage* msg, void*
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT16, &gs_);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_UINT16, &ss_);
 
-			bool f;
+			dbus_bool_t f;
 
-			f = GETFLAG(OF);
+			// FLAGS (https://en.wikipedia.org/wiki/FLAGS_register)
+			f = GETFLAGBOOL(CF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(DF);
+			f = GETFLAGBOOL(PF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(IF);
+			f = GETFLAGBOOL(AF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(SF);
+			f = GETFLAGBOOL(ZF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(ZF);
+			f = GETFLAGBOOL(SF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(AF);
+			f = GETFLAGBOOL(TF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(PF);
+			f = GETFLAGBOOL(IF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(CF);
+			f = GETFLAGBOOL(DF);
+			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
+			f = GETFLAGBOOL(OF);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
 
-			f = GETFLAG(TF);
+			Bit8u iopl = GETFLAG(IOPL) >> 12;
+			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BYTE, &iopl);
+
+			f = GETFLAGBOOL(NT);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(IOPL) >> 12;
+
+			// EFLAGS
+			f = GETFLAGBOOL(VM);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(NT);
+			f = GETFLAGBOOL(AC);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(VM);
-			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(AC);
-			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
-			f = GETFLAG(ID);
+			f = GETFLAGBOOL(ID);
 			dbus_message_iter_append_basic(&ri, DBUS_TYPE_BOOLEAN, &f);
 		}
 
