@@ -5,6 +5,8 @@ authors = ["Oleg Scherbakov <scherbakov.oleg@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-iced = "0.3"
-pollster = "0.2"
-zbus = "2.0.0-beta.7"
+anyhow = { version = "1.0", features = ["backtrace"] }
+serde = { version = "1.0", features = ["serde_derive"] }
+zbus = "3.14"
+zi = "0.3"
+zi-term = "0.3"

@@ -1,9 +1,16 @@
-use iced::{Sandbox, Settings};
+use anyhow::Result;
+use zbus::blocking::Connection;
+use zi::prelude::*;
 
-use crate::gui::DebugBox;
+mod cpu;
+mod tui;
 
-mod gui;
+use crate::tui::debugbox::DebugBox;
 
-fn main() -> iced::Result {
-	DebugBox::run(Settings::default())
+fn main() -> Result<()> {
+	let app = DebugBox::with(Connection::session()?);
+
+	zi_term::incremental()?.run_event_loop(app)?;
+
+	Ok(())
 }
