@@ -5,7 +5,7 @@ use zi::{
 
 const ATTACHED: char = '🟢';
 const DETACHED: char = '⛔';
-const STYLE: Style = Style::bold(super::BACKGROUND, super::FOREGROUND_GRAY);
+const STYLE: Style = Style::normal(super::BACKGROUND, super::FOREGROUND_GRAY);
 
 #[derive(Clone, PartialEq)]
 pub enum Status {
@@ -39,11 +39,11 @@ impl Component for StatusBar {
 	fn view(&self) -> Layout {
 		let tc = TextProperties::new().style(STYLE);
 		let tc = match &self.status {
-			Status::Attached => tc.content(format!(" {ATTACHED} ")),
-			Status::Detached(None) => tc.content(format!(" {DETACHED} ")),
+			Status::Attached => tc.content(format!(" {ATTACHED} Ready")),
+			Status::Detached(None) => tc.content(format!(" {DETACHED} Detached")),
 			Status::Detached(Some(reason)) => tc.content(format!(" {DETACHED} {reason}")),
 		};
 
-		Text::with_key("status-bar", tc).into()
+		Text::with_key("status-bar", tc)
 	}
 }
