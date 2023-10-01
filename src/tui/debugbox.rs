@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use anyhow::Result;
 use zbus::blocking::Connection;
 use zi::prelude::*;
@@ -15,8 +17,9 @@ pub enum Message {
 }
 
 pub struct DebugBox {
+	frame: Rect,
 	link: ComponentLink<Self>,
-	conn: Connection,
+	conn: Rc<Connection>,
 	status: Status,
 	cpu: Cpu,
 }
@@ -43,10 +46,11 @@ impl Component for DebugBox {
 	type Message = Message;
 	type Properties = Connection;
 
-	fn create(conn: Self::Properties, _frame: Rect, link: ComponentLink<Self>) -> Self {
+	fn create(conn: Self::Properties, frame: Rect, link: ComponentLink<Self>) -> Self {
 		let mut this = Self {
+			frame,
 			link,
-			conn,
+			conn: Rc::new(conn),
 			status: Status::Detached(None),
 			cpu: Default::default(),
 		};
@@ -112,14 +116,17 @@ impl Component for DebugBox {
 	}
 
 	fn view(&self) -> Layout {
+		const REGISTERS_WIDTH: usize = 50;
+
 		Layout::column([
 			Item::auto(Layout::row([
-				Item::auto(Code::with(CodeProperties {
+				Item::fixed(self.frame.size.width - REGISTERS_WIDTH - 1)(Code::with(CodeProperties {
+					conn: self.conn.clone(),
 					attached: self.status == Status::Attached,
 					cs: self.cpu.regs.cs,
 					eip: self.cpu.regs.eip,
 				})),
-				Item::fixed(50)(Registers::with(self.cpu.regs)),
+				Item::fixed(REGISTERS_WIDTH)(Registers::with(self.cpu.regs)),
 			])),
 			Item::fixed(1)(StatusBar::with(self.status.clone())),
 		])

@@ -5,7 +5,7 @@ use zi::{
 
 const ATTACHED: char = '🟢';
 const DETACHED: char = '⛔';
-const STYLE: Style = Style::normal(super::BACKGROUND, super::FOREGROUND_GRAY);
+const STYLE: Style = Style::normal(super::BG_GRAY, super::FG_GRAY);
 
 #[derive(Clone, PartialEq)]
 pub enum Status {
