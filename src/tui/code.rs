@@ -1,5 +1,4 @@
-use anyhow::{anyhow, bail, Result};
-use capstone::prelude::*;
+use anyhow::{anyhow, Error};
 use std::rc::Rc;
 use zbus::blocking::Connection;
 use zi::{
@@ -7,10 +6,26 @@ use zi::{
 	prelude::*,
 };
 
+use crate::x86::dec::{Decoder, Instruction};
+
 const FG_EIP: Colour = Colour::rgb(139, 233, 253);
 const STYLE_EIP: Style = Style::normal(super::BG_DARK, FG_EIP);
+const STYLE_SEL: Style = Style::normal(super::BG_GRAY, super::FG_GRAY);
 
-const BYTES_TO_ROWS_RATIO: u32 = 3;
+pub struct Code {
+	props: Properties,
+	frame: Rect,
+	error: Option<Error>,
+	dec: Decoder,
+	code: Vec<Instruction>,
+	skip: usize,
+	pos: usize,
+}
+
+pub enum Message {
+	Up,
+	Down,
+}
 
 pub struct Properties {
 	pub conn: Rc<Connection>,
@@ -25,86 +40,31 @@ impl PartialEq for Properties {
 	}
 }
 
-pub struct Row {
-	offset: u16,
-	data: Vec<u8>,
-	mnemonic: Option<String>,
-	operands: Option<String>,
-}
-
-pub struct Code {
-	props: Properties,
-	frame: Rect,
-	capstone: Capstone,
-	code: Result<Vec<Row>>,
-}
-
-impl Code {
-	fn load(&self) -> Result<Vec<Row>> {
-		if !self.props.attached {
-			bail!("Not attached.");
-		}
-
-		let mut code = Vec::new();
-		let mut start = self.props.eip;
-
-		while code.len() < self.frame.size.height {
-			let limit = self.frame.size.height.saturating_sub(code.len()) as u32 * BYTES_TO_ROWS_RATIO;
-
-			let data: Vec<u8> = self
-				.props
-				.conn
-				.call_method(
-					Some("com.dosbox"),
-					"/mem",
-					Some("com.dosbox"),
-					"get",
-					&(self.props.cs, start, limit),
-				)?
-				.body_unchecked()?;
-
-			code.extend(
-				self.capstone
-					.disasm_all(&data, start.into())
-					.map_err(|e| anyhow!("{e}"))?
-					.iter()
-					.map(|i| Row {
-						offset: i.address() as u16,
-						data: i.bytes().to_vec(),
-						mnemonic: i.mnemonic().map(String::from),
-						operands: i.op_str().map(String::from),
-					}),
-			);
-
-			start += limit;
-		}
-
-		Ok(code)
-	}
-}
-
 impl Component for Code {
-	type Message = ();
+	type Message = Message;
 	type Properties = Properties;
 
 	fn create(props: Self::Properties, frame: Rect, _: ComponentLink<Self>) -> Self {
-		let capstone = Capstone::new()
-			.x86()
-			.mode(arch::x86::ArchMode::Mode16)
-			.syntax(arch::x86::ArchSyntax::Intel)
-			.detail(true)
-			.build()
-			.unwrap();
+		let dec = Decoder::new(props.conn.clone());
 
-		let mut this = Self {
-			props,
-			frame,
-			capstone,
-			code: Err(anyhow!("Not loaded")),
+		let (code, error) = if !props.attached {
+			(Vec::new(), Some(anyhow!("Not attached.")))
+		} else {
+			match dec.after((props.cs, props.eip).into(), frame.size.height) {
+				Ok(c) => (c, None),
+				Err(e) => (Vec::new(), Some(e)),
+			}
 		};
 
-		this.code = this.load();
-		this
+		Self {
+			props,
+			frame,
+			error,
+			dec,
+			code,
+			skip: 0,
+			pos: 0,
+		}
 	}
 
 	fn change(&mut self, props: Self::Properties) -> ShouldRender {
@@ -112,7 +72,15 @@ impl Component for Code {
 			self.props = props;
 
 			if self.props.attached {
-				self.code = self.load();
+				self.pos = 0;
+
+				match self
+					.dec
+					.after((self.props.cs, self.props.eip).into(), self.frame.size.height)
+				{
+					Ok(c) => self.code = c,
+					Err(e) => self.error = Some(e),
+				}
 			}
 
 			true
@@ -122,28 +90,98 @@ impl Component for Code {
 		.into()
 	}
 
-	fn view(&self) -> Layout {
-		let code = match &self.code {
-			Ok(c) => c,
-			Err(e) => {
-				return Text::with(
-					TextProperties::new()
-						.style(super::STYLE)
-						.align(TextAlign::Centre)
-						.content(e.to_string()),
-				);
+	fn update(&mut self, message: Self::Message) -> ShouldRender {
+		if !self.props.attached {
+			return false.into();
+		}
+
+		let prev = (self.skip, self.pos, self.code.len());
+
+		match message {
+			Message::Up if self.pos > 0 => {
+				self.pos -= 1;
 			}
-		};
+			Message::Up if self.skip > 0 => {
+				self.skip -= 1;
+			}
+			Message::Up => {
+				if let Some(offset) = self.code.first().map(|i| i.offset) {
+					match self.dec.before((self.props.cs, offset).into(), self.frame.size.height) {
+						Ok(mut c) => {
+							self.skip = c.len().saturating_sub(1);
+							c.append(&mut self.code);
+							self.code = c;
+						}
+						Err(e) => self.error = Some(e),
+					}
+				}
+			}
+			Message::Down if self.pos < self.frame.height() - 1 => {
+				self.pos += 1;
+			}
+			Message::Down if (self.skip + self.pos) < self.code.len() - 1 => {
+				self.skip += 1;
+			}
+			Message::Down => {
+				if let Some(offset) = self.code.last().map(|i| i.offset + i.data.len() as u32) {
+					self.skip += 1;
+
+					match self.dec.after((self.props.cs, offset).into(), self.frame.size.height) {
+						Ok(c) => self.code.extend(c),
+						Err(e) => self.error = Some(e),
+					}
+				}
+			}
+		}
+
+		((self.skip, self.pos, self.code.len()) != prev).into()
+	}
+
+	fn bindings(&self, bindings: &mut Bindings<Self>) {
+		if !bindings.is_empty() {
+			return;
+		}
+
+		bindings.set_focus(true);
+
+		bindings.command("up", || Message::Up).with([Key::Up]);
+		bindings.command("down", || Message::Down).with([Key::Down]);
+	}
+
+	fn view(&self) -> Layout {
+		if let Some(e) = &self.error {
+			return Text::with(
+				TextProperties::new()
+					.style(super::STYLE)
+					.align(TextAlign::Centre)
+					.content(e.to_string()),
+			);
+		}
 
 		let mut canvas = Canvas::new(self.frame.size);
 		canvas.clear(super::STYLE);
 
-		for (y, row) in code.iter().take(self.frame.size.height).enumerate() {
-			let style = if row.offset as u32 == self.props.eip {
+		for (y, row) in self
+			.code
+			.iter()
+			.skip(self.skip)
+			.take(self.frame.size.height)
+			.enumerate()
+		{
+			let mut style = if row.offset == self.props.eip {
 				STYLE_EIP
 			} else {
 				super::STYLE
 			};
+
+			if self.props.attached && self.pos == y {
+				style.background = STYLE_SEL.background;
+
+				canvas.clear_region(
+					Rect::new(Position::new(0, y), Size::new(self.frame.size.width, 1)),
+					style,
+				);
+			}
 
 			canvas.draw_str(0, y, style, &format!("{:04X}", self.props.cs));
 			canvas.draw_str(6, y, style, &format!("{:04X}", row.offset));

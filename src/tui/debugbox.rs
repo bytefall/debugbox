@@ -4,10 +4,10 @@ use anyhow::Result;
 use zbus::blocking::Connection;
 use zi::prelude::*;
 
-use crate::cpu::Cpu;
 use crate::tui::code::{Code, Properties as CodeProperties};
 use crate::tui::registers::Registers;
 use crate::tui::status_bar::{Status, StatusBar};
+use crate::x86::cpu::Cpu;
 
 pub enum Message {
 	Reload,

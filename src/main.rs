@@ -2,8 +2,8 @@ use anyhow::Result;
 use zbus::blocking::Connection;
 use zi::prelude::*;
 
-mod cpu;
 mod tui;
+mod x86;
 
 use crate::tui::debugbox::DebugBox;
 
