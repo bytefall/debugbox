@@ -111,8 +111,7 @@ impl Component for DebugBox {
 
 		bindings
 			.command("exit", |this: &Self| this.link.exit())
-			.with([Key::Ctrl('c')])
-			.with([Key::Esc]);
+			.with([Key::Ctrl('c')]);
 	}
 
 	fn view(&self) -> Layout {
