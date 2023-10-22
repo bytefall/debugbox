@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Error};
+use iced_x86::{Formatter, Instruction, IntelFormatter};
 use std::rc::Rc;
 use zbus::blocking::Connection;
 use zi::{
@@ -6,7 +7,7 @@ use zi::{
 	prelude::*,
 };
 
-use crate::x86::dec::{Decoder, Instruction};
+use crate::x86::dec::Fetcher;
 
 const FG_EIP: Colour = Colour::rgb(139, 233, 253);
 const STYLE_EIP: Style = Style::normal(super::BG_DARK, FG_EIP);
@@ -16,8 +17,8 @@ pub struct Code {
 	props: Properties,
 	frame: Rect,
 	error: Option<Error>,
-	dec: Decoder,
-	code: Vec<Instruction>,
+	fetch: Fetcher,
+	code: Vec<(Instruction, Vec<u8>)>,
 	skip: usize,
 	pos: usize,
 }
@@ -45,12 +46,12 @@ impl Component for Code {
 	type Properties = Properties;
 
 	fn create(props: Self::Properties, frame: Rect, _: ComponentLink<Self>) -> Self {
-		let dec = Decoder::new(props.conn.clone());
+		let fetch = Fetcher::new(props.conn.clone());
 
 		let (code, error) = if !props.attached {
 			(Vec::new(), Some(anyhow!("Not attached.")))
 		} else {
-			match dec.after((props.cs, props.eip).into(), frame.size.height) {
+			match fetch.after((props.cs, props.eip).into(), frame.size.height) {
 				Ok(c) => (c, None),
 				Err(e) => (Vec::new(), Some(e)),
 			}
@@ -60,7 +61,7 @@ impl Component for Code {
 			props,
 			frame,
 			error,
-			dec,
+			fetch,
 			code,
 			skip: 0,
 			pos: 0,
@@ -75,7 +76,7 @@ impl Component for Code {
 				self.pos = 0;
 
 				match self
-					.dec
+					.fetch
 					.after((self.props.cs, self.props.eip).into(), self.frame.size.height)
 				{
 					Ok(c) => self.code = c,
@@ -105,13 +106,17 @@ impl Component for Code {
 				self.skip -= 1;
 			}
 			Message::Up => {
-				if let Some(offset) = self.code.first().map(|i| i.offset) {
-					match self.dec.before((self.props.cs, offset).into(), self.frame.size.height) {
-						Ok(mut c) => {
+				if let Some(offset) = self.code.first().map(|(i, _)| i.ip32()) {
+					match self
+						.fetch
+						.before((self.props.cs, offset).into(), self.frame.size.height)
+					{
+						Ok(mut c) if !c.is_empty() => {
 							self.skip = c.len().saturating_sub(1);
 							c.append(&mut self.code);
 							self.code = c;
 						}
+						Ok(_) => (),
 						Err(e) => self.error = Some(e),
 					}
 				}
@@ -123,11 +128,13 @@ impl Component for Code {
 				self.skip += 1;
 			}
 			Message::Down => {
-				if let Some(offset) = self.code.last().map(|i| i.offset + i.data.len() as u32) {
-					self.skip += 1;
-
-					match self.dec.after((self.props.cs, offset).into(), self.frame.size.height) {
-						Ok(c) => self.code.extend(c),
+				if let Some(offset) = self.code.last().map(|(i, _)| i.next_ip32()) {
+					match self.fetch.after((self.props.cs, offset).into(), self.frame.size.height) {
+						Ok(c) if !c.is_empty() => {
+							self.skip += 1;
+							self.code.extend(c)
+						}
+						Ok(_) => (),
 						Err(e) => self.error = Some(e),
 					}
 				}
@@ -161,14 +168,18 @@ impl Component for Code {
 		let mut canvas = Canvas::new(self.frame.size);
 		canvas.clear(super::STYLE);
 
-		for (y, row) in self
+		let mut fmt = IntelFormatter::new();
+		fmt.options_mut().set_space_after_operand_separator(true);
+		let mut out = String::new();
+
+		for (y, (ins, data)) in self
 			.code
 			.iter()
 			.skip(self.skip)
 			.take(self.frame.size.height)
 			.enumerate()
 		{
-			let mut style = if row.offset == self.props.eip {
+			let mut style = if ins.ip32() == self.props.eip {
 				STYLE_EIP
 			} else {
 				super::STYLE
@@ -184,20 +195,22 @@ impl Component for Code {
 			}
 
 			canvas.draw_str(0, y, style, &format!("{:04X}", self.props.cs));
-			canvas.draw_str(6, y, style, &format!("{:04X}", row.offset));
+			canvas.draw_str(6, y, style, &format!("{:04X}", ins.ip16()));
 			canvas.draw_str(
 				12,
 				y,
 				style,
-				&row.data.iter().fold(String::new(), |a, x| format!("{a}{x:02X}")),
+				&data.iter().fold(String::new(), |a, x| format!("{a}{x:02X}")),
 			);
 
-			if let Some(mn) = &row.mnemonic {
-				canvas.draw_str(30, y, style, mn);
+			out.clear();
+			fmt.format_mnemonic(ins, &mut out);
+			canvas.draw_str(30, y, style, &out);
 
-				if let Some(op) = &row.operands {
-					canvas.draw_str(42, y, style, op);
-				}
+			if ins.op_count() > 0 {
+				out.clear();
+				fmt.format_all_operands(ins, &mut out);
+				canvas.draw_str(42, y, style, &out);
 			}
 		}
 
