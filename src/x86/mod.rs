@@ -1,4 +1,3 @@
-pub mod cpu;
 pub mod dec;
 
 #[derive(Copy, Clone)]

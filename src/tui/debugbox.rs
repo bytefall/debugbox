@@ -1,13 +1,15 @@
-use std::rc::Rc;
-
 use anyhow::Result;
-use zbus::blocking::Connection;
+use std::rc::Rc;
 use zi::prelude::*;
 
-use crate::tui::code::{Code, Properties as CodeProperties};
-use crate::tui::registers::Registers;
-use crate::tui::status_bar::{Status, StatusBar};
-use crate::x86::cpu::Cpu;
+use crate::{
+	bus::{Proxy, Regs},
+	tui::{
+		code::{Code, Properties as CodeProperties},
+		registers::Registers,
+		status_bar::{Status, StatusBar},
+	},
+};
 
 pub enum Message {
 	Reload,
@@ -19,57 +21,36 @@ pub enum Message {
 pub struct DebugBox {
 	frame: Rect,
 	link: ComponentLink<Self>,
-	conn: Rc<Connection>,
+	proxy: Rc<Proxy>,
 	status: Status,
-	cpu: Cpu,
-}
-
-impl DebugBox {
-	fn update(&mut self) -> Result<()> {
-		self.cpu.regs = self
-			.conn
-			.call_method(Some("com.dosbox"), "/cpu/regs", Some("com.dosbox"), "get", &())?
-			.body_unchecked()?;
-
-		Ok(())
-	}
-
-	fn run(&self) -> Result<()> {
-		self.conn
-			.call_method(Some("com.dosbox"), "/cpu", Some("com.dosbox"), "run", &())?;
-
-		Ok(())
-	}
+	regs: Regs,
 }
 
 impl Component for DebugBox {
 	type Message = Message;
-	type Properties = Connection;
+	type Properties = Proxy;
 
-	fn create(conn: Self::Properties, frame: Rect, link: ComponentLink<Self>) -> Self {
-		let mut this = Self {
+	fn create(proxy: Self::Properties, frame: Rect, link: ComponentLink<Self>) -> Self {
+		// TODO: need to handle timeout with `monitor_activity` (Call failed: Connection timed out)
+		let (regs, status) = match proxy.regs.get() {
+			Ok(r) => (r, Status::Attached),
+			Err(e) => (Default::default(), Status::Detached(Some(e.to_string()))),
+		};
+
+		Self {
 			frame,
 			link,
-			conn: Rc::new(conn),
-			status: Status::Detached(None),
-			cpu: Default::default(),
-		};
-
-		// TODO: need to handle timeout with `monitor_activity` (Call failed: Connection timed out)
-		this.status = if let Err(e) = this.update() {
-			Status::Detached(Some(e.to_string()))
-		} else {
-			Status::Attached
-		};
-
-		this
+			proxy: Rc::new(proxy),
+			status,
+			regs,
+		}
 	}
 
 	fn update(&mut self, message: Self::Message) -> ShouldRender {
 		let mut update = || -> Result<bool> {
 			match message {
 				Message::Reload => {
-					self.update()?;
+					self.regs = self.proxy.regs.get()?;
 					self.status = Status::Attached;
 
 					Ok(true)
@@ -79,7 +60,7 @@ impl Component for DebugBox {
 						return Ok(false);
 					}
 
-					self.run()?;
+					self.proxy.cpu.run()?;
 					self.status = Status::Detached(None);
 
 					Ok(true)
@@ -120,12 +101,12 @@ impl Component for DebugBox {
 		Layout::column([
 			Item::auto(Layout::row([
 				Item::fixed(self.frame.size.width - REGISTERS_WIDTH - 1)(Code::with(CodeProperties {
-					conn: self.conn.clone(),
+					proxy: self.proxy.clone(),
 					attached: self.status == Status::Attached,
-					cs: self.cpu.regs.cs,
-					eip: self.cpu.regs.eip,
+					cs: self.regs.cs,
+					eip: self.regs.eip,
 				})),
-				Item::fixed(REGISTERS_WIDTH)(Registers::with(self.cpu.regs)),
+				Item::fixed(REGISTERS_WIDTH)(Registers::with(self.regs)),
 			])),
 			Item::fixed(1)(StatusBar::with(self.status.clone())),
 		])

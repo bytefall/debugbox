@@ -1,6 +1,6 @@
 use zi::prelude::*;
 
-use crate::x86::cpu::Registers as Regs;
+use crate::bus::Regs;
 
 // const FG_CHANGED: Colour = Colour::rgb(84, 252, 84);
 

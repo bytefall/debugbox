@@ -1,13 +1,15 @@
 use anyhow::{anyhow, Error};
 use iced_x86::{Formatter, Instruction, IntelFormatter};
 use std::rc::Rc;
-use zbus::blocking::Connection;
 use zi::{
 	components::text::{Text, TextAlign, TextProperties},
 	prelude::*,
 };
 
-use crate::x86::dec::Fetcher;
+use crate::{
+	bus::Proxy,
+	x86::dec::{fetch_after, fetch_before},
+};
 
 const FG_EIP: Colour = Colour::rgb(139, 233, 253);
 const STYLE_EIP: Style = Style::normal(super::BG_DARK, FG_EIP);
@@ -17,7 +19,6 @@ pub struct Code {
 	props: Properties,
 	frame: Rect,
 	error: Option<Error>,
-	fetch: Fetcher,
 	code: Vec<(Instruction, Vec<u8>)>,
 	skip: usize,
 	pos: usize,
@@ -29,7 +30,7 @@ pub enum Message {
 }
 
 pub struct Properties {
-	pub conn: Rc<Connection>,
+	pub proxy: Rc<Proxy>,
 	pub attached: bool,
 	pub cs: u16,
 	pub eip: u32,
@@ -46,12 +47,10 @@ impl Component for Code {
 	type Properties = Properties;
 
 	fn create(props: Self::Properties, frame: Rect, _: ComponentLink<Self>) -> Self {
-		let fetch = Fetcher::new(props.conn.clone());
-
 		let (code, error) = if !props.attached {
 			(Vec::new(), Some(anyhow!("Not attached.")))
 		} else {
-			match fetch.after((props.cs, props.eip).into(), frame.size.height) {
+			match fetch_after(&props.proxy, (props.cs, props.eip).into(), frame.size.height) {
 				Ok(c) => (c, None),
 				Err(e) => (Vec::new(), Some(e)),
 			}
@@ -61,7 +60,6 @@ impl Component for Code {
 			props,
 			frame,
 			error,
-			fetch,
 			code,
 			skip: 0,
 			pos: 0,
@@ -75,10 +73,11 @@ impl Component for Code {
 			if self.props.attached {
 				self.pos = 0;
 
-				match self
-					.fetch
-					.after((self.props.cs, self.props.eip).into(), self.frame.size.height)
-				{
+				match fetch_after(
+					&self.props.proxy,
+					(self.props.cs, self.props.eip).into(),
+					self.frame.size.height,
+				) {
 					Ok(c) => self.code = c,
 					Err(e) => self.error = Some(e),
 				}
@@ -107,10 +106,11 @@ impl Component for Code {
 			}
 			Message::Up => {
 				if let Some(offset) = self.code.first().map(|(i, _)| i.ip32()) {
-					match self
-						.fetch
-						.before((self.props.cs, offset).into(), self.frame.size.height)
-					{
+					match fetch_before(
+						&self.props.proxy,
+						(self.props.cs, offset).into(),
+						self.frame.size.height,
+					) {
 						Ok(mut c) if !c.is_empty() => {
 							self.skip = c.len().saturating_sub(1);
 							c.append(&mut self.code);
@@ -129,7 +129,11 @@ impl Component for Code {
 			}
 			Message::Down => {
 				if let Some(offset) = self.code.last().map(|(i, _)| i.next_ip32()) {
-					match self.fetch.after((self.props.cs, offset).into(), self.frame.size.height) {
+					match fetch_after(
+						&self.props.proxy,
+						(self.props.cs, offset).into(),
+						self.frame.size.height,
+					) {
 						Ok(c) if !c.is_empty() => {
 							self.skip += 1;
 							self.code.extend(c)
