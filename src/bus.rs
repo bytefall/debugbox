@@ -26,10 +26,10 @@ trait Cpu {
 	fn callback_info(&self, index: u16) -> Result<String>;
 
 	#[dbus_proxy(name = "step_in")]
-	fn step_in(&self) -> Result<()>;
+	fn step_in(&self) -> Result<u32>;
 
 	#[dbus_proxy(name = "run")]
-	fn run(&self) -> Result<()>;
+	fn run(&self) -> Result<u32>;
 }
 
 #[dbus_proxy(interface = "com.dosbox", default_service = "com.dosbox", default_path = "/cpu/regs")]
