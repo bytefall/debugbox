@@ -6,6 +6,7 @@ use crate::{
 	bus::{Proxy, Regs},
 	tui::{
 		code::{Code, Properties as CodeProperties},
+		data::{Data, Properties as DataProperties},
 		registers::Registers,
 		status_bar::{Status, StatusBar},
 	},
@@ -100,12 +101,19 @@ impl Component for DebugBox {
 
 		Layout::column([
 			Item::auto(Layout::row([
-				Item::fixed(self.frame.size.width - REGISTERS_WIDTH - 1)(Code::with(CodeProperties {
-					proxy: self.proxy.clone(),
-					attached: self.status == Status::Attached,
-					cs: self.regs.cs,
-					eip: self.regs.eip,
-				})),
+				Item::fixed(self.frame.size.width - REGISTERS_WIDTH - 1)(Layout::column([
+					Item::auto(Code::with(CodeProperties {
+						proxy: self.proxy.clone(),
+						attached: self.status == Status::Attached,
+						cs: self.regs.cs,
+						eip: self.regs.eip,
+					})),
+					Item::auto(Data::with(DataProperties {
+						proxy: self.proxy.clone(),
+						attached: self.status == Status::Attached,
+						addr: (self.regs.ds, 0).into(),
+					})),
+				])),
 				Item::fixed(REGISTERS_WIDTH)(Registers::with(self.regs)),
 			])),
 			Item::fixed(1)(StatusBar::with(self.status.clone())),

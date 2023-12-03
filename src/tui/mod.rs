@@ -1,6 +1,7 @@
 use zi::{Colour, Style};
 
 pub mod code;
+pub mod data;
 pub mod debugbox;
 pub mod registers;
 pub mod status_bar;

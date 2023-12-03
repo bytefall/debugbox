@@ -1,6 +1,6 @@
 pub mod dec;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Address {
 	pub segment: u16,
 	pub offset: u32,
