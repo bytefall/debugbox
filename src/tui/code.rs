@@ -29,16 +29,18 @@ pub enum Message {
 	Down,
 }
 
+#[derive(Clone)]
 pub struct Properties {
 	pub proxy: Rc<Proxy>,
 	pub attached: bool,
+	pub focused: bool,
 	pub cs: u16,
 	pub eip: u32,
 }
 
 impl PartialEq for Properties {
 	fn eq(&self, other: &Properties) -> bool {
-		self.attached == other.attached && self.cs == other.cs && self.eip == other.eip
+		self.attached == other.attached && self.focused == other.focused && self.cs == other.cs && self.eip == other.eip
 	}
 }
 
@@ -70,9 +72,7 @@ impl Component for Code {
 		if self.props != props {
 			self.props = props;
 
-			if self.props.attached {
-				self.pos = 0;
-
+			if self.props.attached && self.code.is_empty() {
 				match fetch_after(
 					&self.props.proxy,
 					(self.props.cs, self.props.eip).into(),
@@ -149,11 +149,11 @@ impl Component for Code {
 	}
 
 	fn bindings(&self, bindings: &mut Bindings<Self>) {
+		bindings.set_focus(self.props.focused);
+
 		if !bindings.is_empty() {
 			return;
 		}
-
-		bindings.set_focus(true);
 
 		bindings.command("up", || Message::Up).with([Key::Up]);
 		bindings.command("down", || Message::Down).with([Key::Down]);

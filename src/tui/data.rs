@@ -16,6 +16,7 @@ pub struct Data {
 	data: Vec<u8>,
 }
 
+#[derive(Clone)]
 pub struct Properties {
 	pub proxy: Rc<Proxy>,
 	pub attached: bool,
