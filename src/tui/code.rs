@@ -21,12 +21,14 @@ pub struct Code {
 	error: Option<Error>,
 	code: Vec<(Instruction, Vec<u8>)>,
 	skip: usize,
-	pos: usize,
+	pos: Option<usize>,
 }
 
 pub enum Message {
 	Up,
 	Down,
+	Enter,
+	Escape,
 }
 
 #[derive(Clone)]
@@ -64,7 +66,7 @@ impl Component for Code {
 			error,
 			code,
 			skip: 0,
-			pos: 0,
+			pos: None,
 		}
 	}
 
@@ -98,8 +100,10 @@ impl Component for Code {
 		let prev = (self.skip, self.pos, self.code.len());
 
 		match message {
-			Message::Up if self.pos > 0 => {
-				self.pos -= 1;
+			Message::Up if self.pos.is_some_and(|x| x > 0) => {
+				if let Some(pos) = self.pos.as_mut() {
+					*pos -= 1;
+				}
 			}
 			Message::Up if self.skip > 0 => {
 				self.skip -= 1;
@@ -121,10 +125,12 @@ impl Component for Code {
 					}
 				}
 			}
-			Message::Down if self.pos < self.frame.height() - 1 => {
-				self.pos += 1;
+			Message::Down if self.pos.is_some_and(|x| x < self.frame.height() - 1) => {
+				if let Some(pos) = self.pos.as_mut() {
+					*pos += 1;
+				}
 			}
-			Message::Down if (self.skip + self.pos) < self.code.len() - 1 => {
+			Message::Down if self.skip + self.pos.unwrap_or(self.frame.height()) < self.code.len() - 1 => {
 				self.skip += 1;
 			}
 			Message::Down => {
@@ -143,6 +149,16 @@ impl Component for Code {
 					}
 				}
 			}
+			Message::Enter => {
+				if self.pos.is_none() {
+					self.pos = Some(0);
+				}
+			}
+			Message::Escape => {
+				if self.pos.is_some() {
+					self.pos = None;
+				}
+			}
 		}
 
 		((self.skip, self.pos, self.code.len()) != prev).into()
@@ -157,6 +173,8 @@ impl Component for Code {
 
 		bindings.command("up", || Message::Up).with([Key::Up]);
 		bindings.command("down", || Message::Down).with([Key::Down]);
+		bindings.command("enter", || Message::Enter).with([Key::Char('\n')]);
+		bindings.command("escape", || Message::Escape).with([Key::Esc]);
 	}
 
 	fn view(&self) -> Layout {
@@ -189,7 +207,7 @@ impl Component for Code {
 				super::STYLE
 			};
 
-			if self.props.attached && self.pos == y {
+			if self.props.attached && self.pos == Some(y) {
 				style.background = STYLE_SEL.background;
 
 				canvas.clear_region(
