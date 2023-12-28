@@ -10,3 +10,4 @@ const BG_GRAY: Colour = Colour::rgb(33, 34, 44);
 const BG_DARK: Colour = Colour::rgb(14, 20, 25);
 const FG_GRAY: Colour = Colour::rgb(248, 248, 242);
 const STYLE: Style = Style::normal(BG_DARK, FG_GRAY);
+const STYLE_SEL: Style = Style::normal(BG_GRAY, FG_GRAY);

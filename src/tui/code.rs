@@ -13,7 +13,21 @@ use crate::{
 
 const FG_EIP: Colour = Colour::rgb(139, 233, 253);
 const STYLE_EIP: Style = Style::normal(super::BG_DARK, FG_EIP);
-const STYLE_SEL: Style = Style::normal(super::BG_GRAY, super::FG_GRAY);
+
+#[derive(Clone)]
+pub struct Properties {
+	pub proxy: Rc<Proxy>,
+	pub attached: bool,
+	pub focused: bool,
+	pub cs: u16,
+	pub eip: u32,
+}
+
+impl PartialEq for Properties {
+	fn eq(&self, other: &Properties) -> bool {
+		self.attached == other.attached && self.focused == other.focused && self.cs == other.cs && self.eip == other.eip
+	}
+}
 
 pub struct Code {
 	props: Properties,
@@ -29,21 +43,6 @@ pub enum Message {
 	Down,
 	Enter,
 	Escape,
-}
-
-#[derive(Clone)]
-pub struct Properties {
-	pub proxy: Rc<Proxy>,
-	pub attached: bool,
-	pub focused: bool,
-	pub cs: u16,
-	pub eip: u32,
-}
-
-impl PartialEq for Properties {
-	fn eq(&self, other: &Properties) -> bool {
-		self.attached == other.attached && self.focused == other.focused && self.cs == other.cs && self.eip == other.eip
-	}
 }
 
 impl Component for Code {
@@ -130,7 +129,14 @@ impl Component for Code {
 					*pos += 1;
 				}
 			}
-			Message::Down if self.skip + self.pos.unwrap_or(self.frame.height()) < self.code.len() - 1 => {
+			Message::Down
+				if self
+					.code
+					.len()
+					.saturating_sub(self.skip)
+					.saturating_sub(self.pos.unwrap_or(self.frame.height()))
+					> 0 =>
+			{
 				self.skip += 1;
 			}
 			Message::Down => {
@@ -208,7 +214,7 @@ impl Component for Code {
 			};
 
 			if self.props.attached && self.pos == Some(y) {
-				style.background = STYLE_SEL.background;
+				style.background = super::STYLE_SEL.background;
 
 				canvas.clear_region(
 					Rect::new(Position::new(0, y), Size::new(self.frame.size.width, 1)),

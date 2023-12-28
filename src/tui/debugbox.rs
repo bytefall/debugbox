@@ -144,6 +144,7 @@ impl Component for DebugBox {
 		let data = DataProperties {
 			proxy: self.proxy.clone(),
 			attached: self.status == Status::Attached,
+			focused: self.pane == Pane::Data,
 			addr: (self.regs.ds, 0).into(),
 		};
 
