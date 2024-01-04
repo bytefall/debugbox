@@ -11,3 +11,10 @@ const BG_DARK: Colour = Colour::rgb(14, 20, 25);
 const FG_GRAY: Colour = Colour::rgb(248, 248, 242);
 const STYLE: Style = Style::normal(BG_DARK, FG_GRAY);
 const STYLE_SEL: Style = Style::normal(BG_GRAY, FG_GRAY);
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct PaneStatus {
+	pub attached: bool,
+	pub focused: bool,
+	pub reload: bool,
+}

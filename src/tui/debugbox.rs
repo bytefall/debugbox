@@ -12,6 +12,7 @@ use crate::{
 		data::{Data, Properties as DataProperties},
 		registers::Registers,
 		status_bar::{Status, StatusBar},
+		PaneStatus,
 	},
 };
 
@@ -30,19 +31,56 @@ pub enum Pane {
 
 pub enum Message {
 	Reload,
+	ChangePane(Pane),
 	Run,
 	StepOver,
-	TraceInto,
-	ChangePane(Pane),
+	StepIn,
 }
 
 pub struct DebugBox {
 	frame: Rect,
 	link: ComponentLink<Self>,
 	pane: Pane,
+	reload: bool,
 	proxy: Rc<Proxy>,
 	status: Status,
 	regs: Regs,
+}
+
+impl DebugBox {
+	pub fn update_impl(&mut self, message: Message) -> Result<bool> {
+		self.reload = false;
+
+		match message {
+			Message::Reload => {
+				self.regs = self.proxy.regs.get()?;
+				self.status = Status::Attached;
+				self.reload = true;
+
+				Ok(true)
+			}
+			Message::ChangePane(pane) => {
+				self.pane = pane;
+
+				Ok(true)
+			}
+			Message::Run if self.status == Status::Attached => {
+				self.proxy.cpu.run()?;
+				self.status = Status::Detached(None);
+
+				Ok(true)
+			}
+			Message::StepOver if self.status == Status::Attached => Ok(true),
+			Message::StepIn if self.status == Status::Attached => {
+				self.proxy.cpu.step_in()?;
+				self.regs = self.proxy.regs.get()?;
+				self.reload = true;
+
+				Ok(true)
+			}
+			_ => Ok(false),
+		}
+	}
 }
 
 impl Component for DebugBox {
@@ -60,6 +98,7 @@ impl Component for DebugBox {
 			frame,
 			link,
 			pane: Default::default(),
+			reload: false,
 			proxy: Rc::new(proxy),
 			status,
 			regs,
@@ -67,40 +106,14 @@ impl Component for DebugBox {
 	}
 
 	fn update(&mut self, message: Self::Message) -> ShouldRender {
-		let update = || -> Result<bool> {
-			match message {
-				Message::Reload => {
-					self.regs = self.proxy.regs.get()?;
-					self.status = Status::Attached;
-
-					Ok(true)
-				}
-				Message::Run => {
-					if self.status != Status::Attached {
-						return Ok(false);
-					}
-
-					self.proxy.cpu.run()?;
-					self.status = Status::Detached(None);
-
-					Ok(true)
-				}
-				Message::StepOver => Ok(true),
-				Message::TraceInto => Ok(true),
-				Message::ChangePane(pane) => {
-					self.pane = pane;
-
-					Ok(true)
-				}
-			}
-		};
-
-		update()
-			.unwrap_or_else(|e| {
+		match self.update_impl(message) {
+			Ok(v) => v,
+			Err(e) => {
 				self.status = Status::Detached(Some(e.to_string()));
 				true
-			})
-			.into()
+			}
+		}
+		.into()
 	}
 
 	fn bindings(&self, bindings: &mut Bindings<Self>) {
@@ -113,7 +126,7 @@ impl Component for DebugBox {
 		bindings.command("reload", || Message::Reload).with([Key::Ctrl('r')]);
 		bindings.command("run", || Message::Run).with([Key::F(5)]);
 		bindings.command("step-over", || Message::StepOver).with([Key::F(10)]);
-		bindings.command("trace-into", || Message::TraceInto).with([Key::F(11)]);
+		bindings.command("step-in", || Message::StepIn).with([Key::F(11)]);
 
 		bindings
 			.command("code-pane", || Message::ChangePane(Pane::Code))
@@ -134,17 +147,22 @@ impl Component for DebugBox {
 		const REGISTERS_WIDTH: usize = 50;
 
 		let code = CodeProperties {
+			status: PaneStatus {
+				attached: self.status == Status::Attached,
+				focused: self.pane == Pane::Code,
+				reload: self.reload,
+			},
 			proxy: self.proxy.clone(),
-			attached: self.status == Status::Attached,
-			focused: self.pane == Pane::Code,
-			cs: self.regs.cs,
-			eip: self.regs.eip,
+			addr: (self.regs.cs, self.regs.eip).into(),
 		};
 
 		let data = DataProperties {
+			status: PaneStatus {
+				attached: self.status == Status::Attached,
+				focused: self.pane == Pane::Data,
+				reload: self.reload,
+			},
 			proxy: self.proxy.clone(),
-			attached: self.status == Status::Attached,
-			focused: self.pane == Pane::Data,
 			addr: (self.regs.ds, 0).into(),
 		};
 

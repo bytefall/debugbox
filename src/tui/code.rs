@@ -8,24 +8,26 @@ use zi::{
 
 use crate::{
 	bus::Proxy,
-	x86::dec::{fetch_after, fetch_before},
+	tui::PaneStatus,
+	x86::{
+		dec::{fetch_after, fetch_before},
+		Address,
+	},
 };
 
-const FG_EIP: Colour = Colour::rgb(139, 233, 253);
+const FG_EIP: Colour = Colour::rgb(255, 0, 127);
 const STYLE_EIP: Style = Style::normal(super::BG_DARK, FG_EIP);
 
 #[derive(Clone)]
 pub struct Properties {
+	pub status: PaneStatus,
 	pub proxy: Rc<Proxy>,
-	pub attached: bool,
-	pub focused: bool,
-	pub cs: u16,
-	pub eip: u32,
+	pub addr: Address,
 }
 
 impl PartialEq for Properties {
 	fn eq(&self, other: &Properties) -> bool {
-		self.attached == other.attached && self.focused == other.focused && self.cs == other.cs && self.eip == other.eip
+		self.status == other.status && self.addr == other.addr
 	}
 }
 
@@ -50,10 +52,10 @@ impl Component for Code {
 	type Properties = Properties;
 
 	fn create(props: Self::Properties, frame: Rect, _: ComponentLink<Self>) -> Self {
-		let (code, error) = if !props.attached {
+		let (code, error) = if !props.status.attached {
 			(Vec::new(), Some(anyhow!("Not attached.")))
 		} else {
-			match fetch_after(&props.proxy, (props.cs, props.eip).into(), frame.size.height) {
+			match fetch_after(&props.proxy, props.addr, frame.size.height) {
 				Ok(c) => (c, None),
 				Err(e) => (Vec::new(), Some(e)),
 			}
@@ -70,29 +72,52 @@ impl Component for Code {
 	}
 
 	fn change(&mut self, props: Self::Properties) -> ShouldRender {
-		if self.props != props {
-			self.props = props;
-
-			if self.props.attached && self.code.is_empty() {
-				match fetch_after(
-					&self.props.proxy,
-					(self.props.cs, self.props.eip).into(),
-					self.frame.size.height,
-				) {
-					Ok(c) => self.code = c,
-					Err(e) => self.error = Some(e),
-				}
-			}
-
-			true
-		} else {
-			false
+		if self.props == props {
+			return false.into();
 		}
-		.into()
+
+		if !props.status.attached {
+			self.props = props;
+			return true.into();
+		}
+
+		const BOTTOM_PADDING: usize = 4; // number of extra rows on the botoom
+		let limit = self.frame.height();
+		let pad = limit.saturating_sub(BOTTOM_PADDING);
+
+		let start = self
+			.code
+			.iter()
+			.skip(self.skip)
+			.take(limit)
+			.enumerate()
+			.map(|(i, (ins, _))| (i, ins.ip32()))
+			.find_map(|(i, ip)| {
+				if ip == props.addr.offset {
+					self.code.get(self.skip + i.saturating_sub(pad)).map(|(x, _)| x.ip32())
+				} else {
+					None
+				}
+			})
+			.unwrap_or(props.addr.offset);
+
+		match fetch_after(&props.proxy, (props.addr.segment, start).into(), limit) {
+			Ok(c) => {
+				self.code = c;
+				self.skip = 0;
+				self.pos = None;
+				self.error = None;
+			}
+			Err(e) => self.error = Some(e),
+		}
+
+		self.props = props;
+
+		true.into()
 	}
 
 	fn update(&mut self, message: Self::Message) -> ShouldRender {
-		if !self.props.attached {
+		if !self.props.status.attached {
 			return false.into();
 		}
 
@@ -111,7 +136,7 @@ impl Component for Code {
 				if let Some(offset) = self.code.first().map(|(i, _)| i.ip32()) {
 					match fetch_before(
 						&self.props.proxy,
-						(self.props.cs, offset).into(),
+						(self.props.addr.segment, offset).into(),
 						self.frame.size.height,
 					) {
 						Ok(mut c) if !c.is_empty() => {
@@ -143,7 +168,7 @@ impl Component for Code {
 				if let Some(offset) = self.code.last().map(|(i, _)| i.next_ip32()) {
 					match fetch_after(
 						&self.props.proxy,
-						(self.props.cs, offset).into(),
+						(self.props.addr.segment, offset).into(),
 						self.frame.size.height,
 					) {
 						Ok(c) if !c.is_empty() => {
@@ -171,7 +196,7 @@ impl Component for Code {
 	}
 
 	fn bindings(&self, bindings: &mut Bindings<Self>) {
-		bindings.set_focus(self.props.focused);
+		bindings.set_focus(self.props.status.focused);
 
 		if !bindings.is_empty() {
 			return;
@@ -207,13 +232,13 @@ impl Component for Code {
 			.take(self.frame.size.height)
 			.enumerate()
 		{
-			let mut style = if ins.ip32() == self.props.eip {
+			let mut style = if ins.ip32() == self.props.addr.offset {
 				STYLE_EIP
 			} else {
 				super::STYLE
 			};
 
-			if self.props.attached && self.pos == Some(y) {
+			if self.props.status.attached && self.pos == Some(y) {
 				style.background = super::STYLE_SEL.background;
 
 				canvas.clear_region(
@@ -222,7 +247,7 @@ impl Component for Code {
 				);
 			}
 
-			canvas.draw_str(0, y, style, &format!("{:04X}", self.props.cs));
+			canvas.draw_str(0, y, style, &format!("{:04X}", self.props.addr.segment));
 			canvas.draw_str(6, y, style, &format!("{:04X}", ins.ip16()));
 			canvas.draw_str(
 				12,
