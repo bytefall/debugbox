@@ -196,20 +196,20 @@ impl Component for Data {
 		if let Some(e) = &self.error {
 			return Text::with(
 				TextProperties::new()
-					.style(super::STYLE)
+					.style(super::ST_NORMAL)
 					.align(TextAlign::Centre)
 					.content(e.to_string()),
 			);
 		}
 
 		let mut canvas = Canvas::new(self.frame.size);
-		canvas.clear(super::STYLE);
+		canvas.clear(super::ST_NORMAL);
 
 		for (y, bytes) in self.data.chunks(BYTES_PER_LINE).skip(self.skip).enumerate() {
-			let mut style = super::STYLE;
+			let mut style = super::ST_NORMAL;
 
 			if self.pos == Some(y) {
-				style.background = super::STYLE_SEL.background;
+				style.background = super::ST_SELECTED.background;
 
 				canvas.clear_region(
 					Rect::new(Position::new(0, y), Size::new(self.frame.size.width, 1)),

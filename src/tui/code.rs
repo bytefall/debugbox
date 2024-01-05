@@ -15,9 +15,6 @@ use crate::{
 	},
 };
 
-const FG_EIP: Colour = Colour::rgb(255, 0, 127);
-const STYLE_EIP: Style = Style::normal(super::BG_DARK, FG_EIP);
-
 #[derive(Clone)]
 pub struct Properties {
 	pub status: PaneStatus,
@@ -212,14 +209,14 @@ impl Component for Code {
 		if let Some(e) = &self.error {
 			return Text::with(
 				TextProperties::new()
-					.style(super::STYLE)
+					.style(super::ST_NORMAL)
 					.align(TextAlign::Centre)
 					.content(e.to_string()),
 			);
 		}
 
 		let mut canvas = Canvas::new(self.frame.size);
-		canvas.clear(super::STYLE);
+		canvas.clear(super::ST_NORMAL);
 
 		let mut fmt = IntelFormatter::new();
 		fmt.options_mut().set_space_after_operand_separator(true);
@@ -233,13 +230,13 @@ impl Component for Code {
 			.enumerate()
 		{
 			let mut style = if ins.ip32() == self.props.addr.offset {
-				STYLE_EIP
+				super::ST_ACTIVE
 			} else {
-				super::STYLE
+				super::ST_NORMAL
 			};
 
 			if self.props.status.attached && self.pos == Some(y) {
-				style.background = super::STYLE_SEL.background;
+				style.background = super::ST_SELECTED.background;
 
 				canvas.clear_region(
 					Rect::new(Position::new(0, y), Size::new(self.frame.size.width, 1)),
