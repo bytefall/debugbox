@@ -14,6 +14,7 @@ use crate::{
 		status_bar::{Status, StatusBar},
 		PaneStatus,
 	},
+	x86::dec::step_over,
 };
 
 const FG_SELECTED: Colour = Colour::rgb(0, 255, 0);
@@ -70,7 +71,14 @@ impl DebugBox {
 
 				Ok(true)
 			}
-			Message::StepOver if self.status == Status::Attached => Ok(true),
+			Message::StepOver if self.status == Status::Attached => {
+				step_over(&self.proxy, (self.regs.cs, self.regs.eip).into())?;
+
+				self.regs = self.proxy.regs.get()?;
+				self.reload = true;
+
+				Ok(true)
+			}
 			Message::StepIn if self.status == Status::Attached => {
 				self.proxy.cpu.step_in()?;
 				self.regs = self.proxy.regs.get()?;

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use iced_x86::{Decoder, DecoderOptions, Instruction};
+use iced_x86::{Code, Decoder, DecoderOptions, Instruction};
 
 use super::Address;
 use crate::bus::Proxy;
@@ -108,4 +108,44 @@ pub fn fetch_after(proxy: &Proxy, addr: Address, limit: usize) -> Result<Vec<(In
 	}
 
 	Ok(code)
+}
+
+pub fn step_over(proxy: &Proxy, addr: Address) -> Result<()> {
+	let data = proxy.mem.get(addr.segment, addr.offset, (MAX_INSTR_LEN * 2) as u32)?;
+	let mut dec = Decoder::with_ip(BITNESS, &data, addr.offset as u64, DECODER_OPTIONS);
+
+	let mut ins = Instruction::default();
+	dec.decode_out(&mut ins);
+
+	if !(ins.is_call_near()
+		|| ins.is_call_far()
+		|| ins.is_loop()
+		|| ins.has_rep_prefix()
+		|| ins.has_repne_prefix()
+		|| ins.code() == Code::Int_imm8)
+	{
+		proxy.cpu.step_in()?;
+
+		return Ok(());
+	}
+
+	dec.decode_out(&mut ins);
+
+	if ins.is_invalid() {
+		return Ok(());
+	}
+
+	let mut data = [0u8; MAX_INSTR_LEN];
+
+	for (i, d) in data.iter_mut().enumerate().take(ins.len()) {
+		*d = proxy.mem.set(addr.segment, ins.ip32() + i as u32, 0xCC)?;
+	}
+
+	proxy.cpu.run()?;
+
+	for (i, d) in data.iter().enumerate().take(ins.len()) {
+		proxy.mem.set(addr.segment, ins.ip32() + i as u32, *d)?;
+	}
+
+	Ok(())
 }
