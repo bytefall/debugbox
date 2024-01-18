@@ -5,18 +5,18 @@ use super::Address;
 use crate::bus::Proxy;
 
 const DECODER_OPTIONS: u32 = DecoderOptions::NONE;
-const AVG_INSTR_LEN: usize = 3; // average instruction length
 const MAX_INSTR_LEN: usize = 15; // maximal instruction length (don't load less than that)
 const SKIP_INSTR_LEN: usize = MAX_INSTR_LEN * 3; // number of bytes to skip as a few instructions might be corrupted
+const FETCH_ATTEMPT_NUM: usize = 5; // number of attempts to decode instructions
 const BITNESS: u32 = 16;
 
 pub fn fetch_before(proxy: &Proxy, addr: Address, limit: usize) -> Result<Vec<(Instruction, Vec<u8>)>> {
 	let mut code: Vec<(Instruction, Vec<u8>)> = Vec::new();
 
-	for attempt in 1..=5 {
+	for attempt in 1..=FETCH_ATTEMPT_NUM {
 		let first = code.first().map(|(i, _)| i.ip32()).unwrap_or(addr.offset);
 		let start =
-			first.saturating_sub((attempt * SKIP_INSTR_LEN + limit.saturating_sub(code.len()) * AVG_INSTR_LEN) as u32);
+			first.saturating_sub((attempt * SKIP_INSTR_LEN + limit.saturating_sub(code.len()) * MAX_INSTR_LEN) as u32);
 
 		let data = proxy.mem.get(addr.segment, start, first.saturating_sub(start))?;
 		let mut dec = Decoder::with_ip(BITNESS, &data, start.into(), DECODER_OPTIONS);
@@ -74,10 +74,10 @@ pub fn fetch_after(proxy: &Proxy, addr: Address, limit: usize) -> Result<Vec<(In
 	let mut code: Vec<(Instruction, Vec<u8>)> = Vec::new();
 	let mut ins = Instruction::default();
 
-	for attempt in 1..=5 {
+	for attempt in 1..=FETCH_ATTEMPT_NUM {
 		let start = code.last().map(|(i, _)| i.next_ip32()).unwrap_or(addr.offset);
 		let end = max.min(
-			start.saturating_add((attempt * SKIP_INSTR_LEN + limit.saturating_sub(code.len()) * AVG_INSTR_LEN) as u32),
+			start.saturating_add((attempt * SKIP_INSTR_LEN + limit.saturating_sub(code.len()) * MAX_INSTR_LEN) as u32),
 		);
 
 		let data = proxy.mem.get(addr.segment, start, end.saturating_sub(start))?;
