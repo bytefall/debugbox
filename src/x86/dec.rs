@@ -119,6 +119,8 @@ pub fn step_over(proxy: &Proxy, addr: Address) -> Result<()> {
 
 	if !(ins.is_call_near()
 		|| ins.is_call_far()
+		|| ins.is_call_near_indirect()
+		|| ins.is_call_far_indirect()
 		|| ins.is_loop()
 		|| ins.has_rep_prefix()
 		|| ins.has_repne_prefix()
