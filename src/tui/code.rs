@@ -229,38 +229,43 @@ impl Component for Code {
 			.take(self.frame.size.height)
 			.enumerate()
 		{
-			let mut style = if ins.ip32() == self.props.addr.offset {
-				super::ST_ACTIVE
+			let (mut addr_st, mut code_st) = if ins.ip32() == self.props.addr.offset {
+				(super::ST_ACTIVE, super::ST_ACTIVE)
 			} else {
-				super::ST_NORMAL
+				(super::ST_CAPTION, super::ST_NORMAL)
 			};
 
 			if self.props.status.attached && self.pos == Some(y) {
-				style.background = super::ST_SELECTED.background;
+				addr_st.background = super::ST_SELECTED.background;
+				code_st.background = super::ST_SELECTED.background;
 
 				canvas.clear_region(
 					Rect::new(Position::new(0, y), Size::new(self.frame.size.width, 1)),
-					style,
+					code_st,
 				);
 			}
 
-			canvas.draw_str(0, y, style, &format!("{:04X}", self.props.addr.segment));
-			canvas.draw_str(6, y, style, &format!("{:04X}", ins.ip16()));
+			canvas.draw_str(
+				0,
+				y,
+				addr_st,
+				&format!("{:04X}:{:04X}", self.props.addr.segment, ins.ip16()),
+			);
 			canvas.draw_str(
 				12,
 				y,
-				style,
+				code_st,
 				&data.iter().fold(String::new(), |a, x| format!("{a}{x:02X}")),
 			);
 
 			out.clear();
 			fmt.format_mnemonic(ins, &mut out);
-			canvas.draw_str(30, y, style, &out);
+			canvas.draw_str(30, y, code_st, &out);
 
 			if ins.op_count() > 0 {
 				out.clear();
 				fmt.format_all_operands(ins, &mut out);
-				canvas.draw_str(42, y, style, &out);
+				canvas.draw_str(42, y, code_st, &out);
 			}
 		}
 

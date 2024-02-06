@@ -206,34 +206,39 @@ impl Component for Data {
 		canvas.clear(super::ST_NORMAL);
 
 		for (y, bytes) in self.data.chunks(BYTES_PER_LINE).skip(self.skip).enumerate() {
-			let mut style = super::ST_NORMAL;
+			let mut addr_st = super::ST_CAPTION;
+			let mut data_st = super::ST_NORMAL;
 
 			if self.pos == Some(y) {
-				style.background = super::ST_SELECTED.background;
+				addr_st.background = super::ST_SELECTED.background;
+				data_st.background = super::ST_SELECTED.background;
 
 				canvas.clear_region(
 					Rect::new(Position::new(0, y), Size::new(self.frame.size.width, 1)),
-					style,
+					data_st,
 				);
 			}
 
-			canvas.draw_str(0, y, style, &format!("{:04X}", self.addr.segment));
 			canvas.draw_str(
-				6,
+				0,
 				y,
-				style,
-				&format!("{:04X}", self.addr.offset as usize + (y + self.skip) * BYTES_PER_LINE),
+				addr_st,
+				&format!(
+					"{:04X}:{:04X}",
+					self.addr.segment,
+					self.addr.offset as usize + (y + self.skip) * BYTES_PER_LINE
+				),
 			);
 			canvas.draw_str(
 				12,
 				y,
-				style,
+				data_st,
 				&bytes.iter().fold(String::new(), |a, x| format!("{a}{x:02X} ")),
 			);
 			canvas.draw_str(
-				61,
+				62,
 				y,
-				style,
+				data_st,
 				&bytes.iter().fold(String::new(), |a, x| {
 					let c = char::from(*x);
 					format!("{a}{}", if matches!(*x, 32..=0x7E) { c } else { NON_ASCII_CHAR })
