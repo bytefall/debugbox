@@ -9,9 +9,9 @@ mod x86;
 use crate::{bus::Proxy, tui::debugbox::DebugBox};
 
 fn main() -> Result<()> {
-	let app = DebugBox::with(Proxy::new(&Connection::session()?)?);
+    let app = DebugBox::with(Proxy::new(&Connection::session()?)?);
 
-	zi_term::incremental()?.run_event_loop(app)?;
+    zi_term::incremental()?.run_event_loop(app)?;
 
-	Ok(())
+    Ok(())
 }

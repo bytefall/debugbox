@@ -18,7 +18,7 @@ const ST_ACTIVE: Style = Style::normal(BG_DARK, Colour::rgb(255, 0, 127));
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct PaneStatus {
-	pub attached: bool,
-	pub focused: bool,
-	pub reload: bool,
+    pub attached: bool,
+    pub focused: bool,
+    pub reload: bool,
 }
