@@ -124,37 +124,36 @@ impl Component for DebugBox {
         .into()
     }
 
-    fn bindings(&self, bindings: &mut Bindings<Self>) {
-        if !bindings.is_empty() {
+    fn bindings(&self, bind: &mut Bindings<Self>) {
+        if !bind.is_empty() {
             return;
         }
 
-        bindings.set_focus(true);
+        bind.set_focus(true);
 
-        bindings
-            .command("reload", || Message::Reload)
+        bind.command("reload", || Message::Reload)
             .with([Key::Ctrl('r')]);
-        bindings.command("run", || Message::Run).with([Key::F(5)]);
-        bindings
-            .command("step-over", || Message::StepOver)
+        bind.command("run", || Message::Run).with([Key::F(5)]);
+        bind.command("step-over", || Message::StepOver)
             .with([Key::F(10)]);
-        bindings
-            .command("step-in", || Message::StepIn)
+        bind.command("step-in", || Message::StepIn)
             .with([Key::F(11)]);
 
-        bindings
-            .command("code-pane", || Message::ChangePane(Pane::Code))
+        bind.command("code-pane", || Message::ChangePane(Pane::Code))
             .with([Key::Alt('1')]);
-        bindings
-            .command("data-pane", || Message::ChangePane(Pane::Data))
+        bind.command("data-pane", || Message::ChangePane(Pane::Data))
             .with([Key::Alt('2')]);
-        bindings
-            .command("registers-pane", || Message::ChangePane(Pane::Registers))
+        bind.command("registers-pane", || Message::ChangePane(Pane::Registers))
             .with([Key::Alt('3')]);
 
-        bindings
-            .command("exit", |this: &Self| this.link.exit())
+        bind.command("exit", |this: &Self| this.link.exit())
             .with([Key::Ctrl('c')]);
+    }
+
+    fn resize(&mut self, frame: Rect) -> ShouldRender {
+        self.frame = frame;
+
+        true.into()
     }
 
     fn view(&self) -> Layout {

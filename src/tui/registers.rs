@@ -31,6 +31,12 @@ impl Component for Registers {
         true.into()
     }
 
+    fn resize(&mut self, frame: Rect) -> ShouldRender {
+        self.frame = frame;
+
+        true.into()
+    }
+
     fn view(&self) -> Layout {
         let (r, p) = (self.regs, self.prev);
 

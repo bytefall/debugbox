@@ -182,21 +182,24 @@ impl Component for Data {
         ((self.skip, self.pos, self.data.len()) != prev).into()
     }
 
-    fn bindings(&self, bindings: &mut Bindings<Self>) {
-        bindings.set_focus(self.props.status.focused);
+    fn bindings(&self, bind: &mut Bindings<Self>) {
+        bind.set_focus(self.props.status.focused);
 
-        if !bindings.is_empty() {
+        if !bind.is_empty() {
             return;
         }
 
-        bindings.command("up", || Message::Up).with([Key::Up]);
-        bindings.command("down", || Message::Down).with([Key::Down]);
-        bindings
-            .command("enter", || Message::Enter)
+        bind.command("up", || Message::Up).with([Key::Up]);
+        bind.command("down", || Message::Down).with([Key::Down]);
+        bind.command("enter", || Message::Enter)
             .with([Key::Char('\n')]);
-        bindings
-            .command("escape", || Message::Escape)
-            .with([Key::Esc]);
+        bind.command("escape", || Message::Escape).with([Key::Esc]);
+    }
+
+    fn resize(&mut self, frame: Rect) -> ShouldRender {
+        self.frame = frame;
+
+        true.into()
     }
 
     fn view(&self) -> Layout {
